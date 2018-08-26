@@ -1,0 +1,5 @@
+user_diskio.c:123:9:USER_status	0	static
+user_diskio.c:162:9:USER_write	0	static
+user_diskio.c:184:9:USER_ioctl	0	static
+user_diskio.c:141:9:USER_read	0	static
+user_diskio.c:108:9:USER_initialize	0	static
