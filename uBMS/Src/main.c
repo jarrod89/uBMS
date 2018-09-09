@@ -102,10 +102,25 @@ enum {
 uint8_t aTxBuffer[13];
 /* Buffer used for reception */
 uint8_t aRxBuffer[13];
+
+//Globals for debug
 uint16_t voltages[18];
-float voltagesFloat[18];
+
+
 uint16_t auxVoltages[12];
 float auxVoltagesFloat[12];
+float current=0;
+
+uint32_t tickstart = 0;
+uint32_t main_period = 1000; //tick is 100us, set period for 10hz, 100ms
+float maxBrickV=3.5;
+float minBrickV=3.5;
+uint8_t cells[] = ACTIVE_CELLS;
+float voltagesFloat[SIZE_OF_ARRAY(cells)];
+uint8_t state=2;
+uint8_t minVctr=3;
+uint8_t maxVctr=3;
+
 /* transfer state */
 __IO uint32_t wTransferState = TRANSFER_WAIT;
 
@@ -141,7 +156,7 @@ void LTC_Write(uint16_t cmd16, uint8_t total_ic, uint8_t *data);
   * @retval None
   */
 int main(void)
- {
+  {
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -191,7 +206,8 @@ int main(void)
   delay_u(300);
   LTC_wake(1);
   uint8_t CRGA[] = {0xFC, 0x00, 0x00, 0x00, 0x00, 0x00};
-  uint8_t CRGB[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  uint8_t CRGB[] = {0x0F, 0x00, 0x00, 0x00, 0x00, 0x00};
+  //CRGA[5]= (CRGA[5] | 0x01);
   LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
 
   while(0) //this loop cycles through the cell discharge channels for testing, ie flashes all the pretty lights!
@@ -226,8 +242,7 @@ int main(void)
 		LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
 		delay_m(100);
   }
-
-
+  tickstart = HAL_GetTick();
   while (1)
   {
 	  /* Main loop, testing for board bring-up.
@@ -236,8 +251,18 @@ int main(void)
 	   * read out cell voltages
 	   *
 	   */
+
+	  /*
+	   * Run main loop at 10hz
+	   * get a low power mode working and use an interrupt instead of polling the sysTick
+	   */
+	  while((HAL_GetTick() - tickstart) < main_period)
+	  {
+	  }
+	  tickstart = HAL_GetTick();
+
 	  LTC_wake(1);
-	  delay_u(1000);
+	  delay_u(300);
 	  //Measure cell voltages ################################################################
       HAL_GPIO_TogglePin(LED2_GPIO_PORT, LED2_PIN);
 	  LTC_wake(1);
@@ -279,18 +304,89 @@ int main(void)
 	  }
 
 	  //Convert to float for debug
-	  for(int i=0; i<18; i++)
+	  maxBrickV=(float)(voltages[0])*ADC_RESOLUTION;
+	  minBrickV=(float)(voltages[0])*ADC_RESOLUTION;
+	  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
 	  {
-		  voltagesFloat[i]=(float)(voltages[i])*0.0001;
+		  //only convert the cells in cells[] array
+		  voltagesFloat[i]=(float)(voltages[cells[i]])*0.0001;
+		  //get max and min
+		  if(voltagesFloat[i] > maxBrickV)
+		  			  maxBrickV=voltagesFloat[i];
+		  if(voltagesFloat[i] < minBrickV)
+		  			  minBrickV=voltagesFloat[i];
 	  }
 
 	  //Convert to float for debug
 	  for(int i=0; i<12; i++)
 	  {
-		  auxVoltagesFloat[i]=(float)(auxVoltages[i])*0.0001;
+		  auxVoltagesFloat[i]=(float)(auxVoltages[i])*ADC_RESOLUTION;
 	  }
 
+	  current=(auxVoltagesFloat[0] - auxVoltagesFloat[1] - AMP_OFFSET_ERROR) * AMPS_PER_VOLT;
 
+
+	  //Check that we are good to ride!
+	  if(minBrickV > MIN_V)
+	  {
+		  minVctr=3;
+	  }
+	  else
+	  {
+		  if(minVctr>1)
+			  minVctr--;
+		  else
+			  state = 0;
+	  }
+
+	  //Check that we are good to charge!
+	  if(maxBrickV < MAX_V)
+	  {
+		  maxVctr=3;
+	  }
+	  else
+	  {
+		  if(maxVctr)
+			  maxVctr--;
+		  else
+			  state = 0;
+	  }
+	  //state=0;
+	  switch(state){
+	  case 0:
+		  // off state.. wait for reset
+		  //turn off load FET
+		  CRGB[0]= (CRGB[0] | 0x01);
+		  //turn off charge FET
+		  CRGB[0]= (CRGB[0] | 0x02);
+		  break;
+	  case 1:
+		  //check buttons
+/*		  if(resetbutton)
+			  state=2;
+		  else if(chargebutton)
+			  state=3;
+*/
+		  break;
+	  case 2:
+		  //turn on load FET
+		  CRGB[0]= (CRGB[0] & ~0x01);
+		  state=1;
+		  break;
+	  case 3:
+		  //turn on charge FET
+		  CRGB[0]= (CRGB[0] & ~0x02);
+		  state=1;
+		  break;
+	  default:
+		  state=0;
+		  break;
+	  }
+
+	  LTC_wake(1);
+	  delay_u(300);
+	  LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
+	  LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
   }
 }
 

@@ -52,10 +52,18 @@
 #define __MAIN_H__
 
 /* Includes ------------------------------------------------------------------*/
+#define MIN_V (2.5)
+#define MAX_V (4.2)
 
-/* USER CODE BEGIN Includes */
+#define ACTIVE_CELLS {0,1,2,3,4, 6,7,8,9,10, 12,13,14,15}
+//current shunt
+#define RSHUNT 0.001
+#define AMP_GAIN 31.6
+#define AMPS_PER_VOLT (1/(RSHUNT*AMP_GAIN))
+#define AMP_OFFSET_ERROR (-0.0011)
 
-/* USER CODE END Includes */
+#define ADC_RESOLUTION (0.0001)
+
 #define BMB_CS_GPIO_PORT GPIOA
 #define BMB_CS_PIN GPIO_PIN_4
 
@@ -101,6 +109,7 @@
 #define delay_u(_micro_) HAL_Delay((int)(_micro_/100))
 #define delay_m(_milli_) HAL_Delay(_milli_*10)
 
+#define SIZE_OF_ARRAY(_array) (sizeof(_array) / sizeof(_array[0]))
 /* Private define ------------------------------------------------------------*/
 
 /* ########################## Assert Selection ############################## */
