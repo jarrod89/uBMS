@@ -2,47 +2,13 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body
+  * @brief          : uBMS bring-up code
   ******************************************************************************
-  * This notice applies to any and all portions of this file
-  * that are not between comment pairs USER CODE BEGIN and
-  * USER CODE END. Other portions of this file, whether 
-  * inserted by the user or by software development tools
-  * are owned by their respective copyright owners.
-  *
-  * Copyright (c) 2018 STMicroelectronics International N.V. 
-  * All rights reserved.
-  *
-  * Redistribution and use in source and binary forms, with or without 
-  * modification, are permitted, provided that the following conditions are met:
-  *
-  * 1. Redistribution of source code must retain the above copyright notice, 
-  *    this list of conditions and the following disclaimer.
-  * 2. Redistributions in binary form must reproduce the above copyright notice,
-  *    this list of conditions and the following disclaimer in the documentation
-  *    and/or other materials provided with the distribution.
-  * 3. Neither the name of STMicroelectronics nor the names of other 
-  *    contributors to this software may be used to endorse or promote products 
-  *    derived from this software without specific written permission.
-  * 4. This software, including modifications and/or derivative works of this 
-  *    software, must execute solely and exclusively on microcontroller or
-  *    microprocessor devices manufactured by or for STMicroelectronics.
-  * 5. Redistribution and use of this software other than as permitted under 
-  *    this license is void and will automatically terminate your rights under 
-  *    this license. 
-  *
-  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
-  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
-  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
-  * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
-  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
-  * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-  * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
-  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
-  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * Hacky bring-up code for uBMS hardware: https://workspace.circuitmaker.com/Projects/Details/Jarrod-Tuma/EVBMS
+  * LTC6813 functions are loosely based on the Arduino library from ADI: https://github.com/analogdevicesinc/Linduino/blob/master/LTSketchbook/Part%20Number/6000/6811/DC2259/DC2259.ino
+  * Not suitable for anything! No responsibility taken for any use of this code!
+  * Always monitor your batteries while charging. It's your own damn fault if YOU burn down your house while running this code!
+  * Seriously though, no testing has been done on this code/hardware. Think about this before leaving it alone in a room with your batteries.
   *
   ******************************************************************************
   */
@@ -52,7 +18,6 @@
 #include "fatfs.h"
 #include "usb_device.h"
 
-/* USER CODE BEGIN Includes */
 const uint16_t crc15Table[256] = {0x0,0xc599, 0xceab, 0xb32, 0xd8cf, 0x1d56, 0x1664, 0xd3fd, 0xf407, 0x319e, 0x3aac,  //!<precomputed CRC15 Table
                                 0xff35, 0x2cc8, 0xe951, 0xe263, 0x27fa, 0xad97, 0x680e, 0x633c, 0xa6a5, 0x7558, 0xb0c1,
                                 0xbbf3, 0x7e6a, 0x5990, 0x9c09, 0x973b, 0x52a2, 0x815f, 0x44c6, 0x4ff4, 0x8a6d, 0x5b2e,
@@ -77,7 +42,6 @@ const uint16_t crc15Table[256] = {0x0,0xc599, 0xceab, 0xb32, 0xd8cf, 0x1d56, 0x1
                                 0x2d02, 0xa76f, 0x62f6, 0x69c4, 0xac5d, 0x7fa0, 0xba39, 0xb10b, 0x7492, 0x5368, 0x96f1, 0x9dc3,
                                 0x585a, 0x8ba7, 0x4e3e, 0x450c, 0x8095
                                };
-/* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
@@ -91,8 +55,6 @@ SPI_HandleTypeDef hspi2;
 
 UART_HandleTypeDef huart1;
 
-/* USER CODE BEGIN PV */
-/* Private variables ---------------------------------------------------------*/
 enum {
 	TRANSFER_WAIT,
 	TRANSFER_COMPLETE,
@@ -105,7 +67,6 @@ uint8_t aRxBuffer[13];
 
 //Globals for debug
 uint16_t voltages[18];
-
 
 uint16_t auxVoltages[12];
 float auxVoltagesFloat[12];

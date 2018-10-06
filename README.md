@@ -16,7 +16,7 @@ Features:
 * SD card for logging battery performance
 
 This repository contains code, calculations and documentation for the project.
-
+The project was created with Atollic TrueSTUDIO for STM32, initialization code was generated with STM32cubeMX.
 PCB/schematic in circuitmaker: https://workspace.circuitmaker.com/Projects/Details/Jarrod-Tuma/EVBMS
 
 Project log: https://hackaday.io/project/159341-bms
