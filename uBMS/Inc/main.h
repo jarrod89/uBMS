@@ -55,7 +55,7 @@
 #define MIN_V (2.5)
 #define MAX_V (4.2)
 
-#define ACTIVE_CELLS {0,1,2,3,4, 6,7,8,9,10, 12,13,14,15}
+#define ACTIVE_CELLS {0,1,2,3,4,5, 6,7,8,9,10, 12,13,14,15,16,17}
 //current shunt
 #define RSHUNT 0.001
 #define AMP_GAIN 31.6
@@ -64,6 +64,15 @@
 
 #define ADC_RESOLUTION (0.0001)
 
+//Inputs:
+#define TEST_BTN_GPIO_PORT GPIOB
+#define TEST_BTN_PIN GPIO_PIN_0
+#define CLEAR_BTN_GPIO_PORT GPIOB
+#define CLEAR_BTN_PIN GPIO_PIN_1
+#define test_btn() HAL_GPIO_ReadPin(TEST_BTN_GPIO_PORT, TEST_BTN_PIN)
+#define clear_btn() HAL_GPIO_ReadPin(CLEAR_BTN_GPIO_PORT, CLEAR_BTN_PIN)
+
+//Outputs:
 #define BMB_CS_GPIO_PORT GPIOA
 #define BMB_CS_PIN GPIO_PIN_4
 
@@ -105,6 +114,13 @@
 //Macros for timing and simple IO
 #define cs_low() HAL_GPIO_WritePin(BMB_CS_GPIO_PORT, BMB_CS_PIN, LOW)
 #define cs_high() HAL_GPIO_WritePin(BMB_CS_GPIO_PORT, BMB_CS_PIN, HIGH)
+
+#define chargeContactor_off() HAL_GPIO_WritePin(chargeContactor_GPIO_PORT, chargeContactor_PIN, LOW)
+#define chargeContactor_on() HAL_GPIO_WritePin(chargeContactor_GPIO_PORT, chargeContactor_PIN, HIGH)
+#define busContactor_off() HAL_GPIO_WritePin(busContactor_GPIO_PORT, busContactor_PIN, LOW)
+#define busContactor_on() HAL_GPIO_WritePin(busContactor_GPIO_PORT, busContactor_PIN, HIGH)
+
+
 //systick is 100us
 #define delay_u(_micro_) HAL_Delay((int)(_micro_/100))
 #define delay_m(_milli_) HAL_Delay(_milli_*10)

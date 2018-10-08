@@ -264,7 +264,7 @@ int main(void)
 		  }
 	  }
 
-	  //Convert to float for debug
+	  //Convert to float
 	  maxBrickV=(float)(voltages[0])*ADC_RESOLUTION;
 	  minBrickV=(float)(voltages[0])*ADC_RESOLUTION;
 	  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
@@ -312,7 +312,7 @@ int main(void)
 		  else
 			  state = 0;
 	  }
-	  //state=0;
+	  state=3;
 	  switch(state){
 	  case 0:
 		  // off state.. wait for reset
@@ -320,23 +320,30 @@ int main(void)
 		  CRGB[0]= (CRGB[0] | 0x01);
 		  //turn off charge FET
 		  CRGB[0]= (CRGB[0] | 0x02);
+
+		  chargeContactor_off();
+		  busContactor_off();
 		  break;
 	  case 1:
 		  //check buttons
-/*		  if(resetbutton)
+		  if(clear_btn()==0) //ride mode
 			  state=2;
-		  else if(chargebutton)
+		  else if(test_btn()==0) //charge mode?
 			  state=3;
-*/
+
 		  break;
 	  case 2:
 		  //turn on load FET
 		  CRGB[0]= (CRGB[0] & ~0x01);
+		  //turn on bus contactor
+		  busContactor_on();
 		  state=1;
 		  break;
 	  case 3:
 		  //turn on charge FET
 		  CRGB[0]= (CRGB[0] & ~0x02);
+		  //turn on charge contactor
+		  chargeContactor_on();
 		  state=1;
 		  break;
 	  default:
@@ -344,6 +351,7 @@ int main(void)
 		  break;
 	  }
 
+	  //Write gpio outputs to 6813
 	  LTC_wake(1);
 	  delay_u(300);
 	  LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
