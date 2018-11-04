@@ -365,6 +365,9 @@ int main(void)
 		  chargeSSR_off();
 
  		  HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, 0);
+
+ 		  if(maxBrickV < (MAX_V-BRICK_V_HYST))
+ 			  state = 3;
 		  break;
 	  case 1:
 		  //check buttons

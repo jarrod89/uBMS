@@ -54,8 +54,9 @@
 /* Includes ------------------------------------------------------------------*/
 #define MIN_V (2.5)
 #define MAX_V (3.655)
+#define BRICK_V_HYST (0.01)
 //(4.2)
-#define BLEED_THRESHOLD (3.3)
+#define BLEED_THRESHOLD (3.0)
 #define OVT (65.0)
 #define ACTIVE_CELLS {0,1,2,3,4, 6,7,8,9,10, 12,13,14,15, 16}
 //current shunt
