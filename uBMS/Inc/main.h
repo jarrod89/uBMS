@@ -53,9 +53,11 @@
 
 /* Includes ------------------------------------------------------------------*/
 #define MIN_V (2.5)
-#define MAX_V (4.2)
-
-#define ACTIVE_CELLS {0,1,2,3,4,5, 6,7,8,9,10, 12,13,14,15,16,17}
+#define MAX_V (3.655)
+//(4.2)
+#define BLEED_THRESHOLD (3.3)
+#define OVT (65.0)
+#define ACTIVE_CELLS {0,1,2,3,4, 6,7,8,9,10, 12,13,14,15, 16}
 //current shunt
 #define RSHUNT 0.001
 #define AMP_GAIN 31.6
@@ -91,6 +93,8 @@
 #define chargeContactor_PIN GPIO_PIN_3
 #define prechargeContactor_GPIO_PORT GPIOB
 #define prechargeContactor_PIN GPIO_PIN_10
+#define chargeSSR_GPIO_PORT GPIOB
+#define chargeSSR_PIN GPIO_PIN_5
 #define HIGH 1
 #define LOW 0
 
@@ -110,7 +114,8 @@
 #define RDCVD 0x000A
 #define RDCVE 0x0009
 #define RDCVF 0x000B
-
+#define RDSTATA 0x0010
+#define ADSTAT 0x0468
 //Macros for timing and simple IO
 #define cs_low() HAL_GPIO_WritePin(BMB_CS_GPIO_PORT, BMB_CS_PIN, LOW)
 #define cs_high() HAL_GPIO_WritePin(BMB_CS_GPIO_PORT, BMB_CS_PIN, HIGH)
@@ -119,7 +124,10 @@
 #define chargeContactor_on() HAL_GPIO_WritePin(chargeContactor_GPIO_PORT, chargeContactor_PIN, HIGH)
 #define busContactor_off() HAL_GPIO_WritePin(busContactor_GPIO_PORT, busContactor_PIN, LOW)
 #define busContactor_on() HAL_GPIO_WritePin(busContactor_GPIO_PORT, busContactor_PIN, HIGH)
-
+#define prechargeContactor_off() HAL_GPIO_WritePin(prechargeContactor_GPIO_PORT, prechargeContactor_PIN, LOW)
+#define prechargeContactor_on() HAL_GPIO_WritePin(prechargeContactor_GPIO_PORT, prechargeContactor_PIN, HIGH)
+#define chargeSSR_off() HAL_GPIO_WritePin(chargeSSR_GPIO_PORT, chargeSSR_PIN, LOW)
+#define chargeSSR_on() HAL_GPIO_WritePin(chargeSSR_GPIO_PORT, chargeSSR_PIN, HIGH)
 
 //systick is 100us
 #define delay_u(_micro_) HAL_Delay((int)(_micro_/100))

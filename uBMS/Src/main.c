@@ -71,16 +71,18 @@ uint16_t voltages[18];
 uint16_t auxVoltages[12];
 float auxVoltagesFloat[12];
 float current=0;
-
+float dieTemp = 0;
 uint32_t tickstart = 0;
-uint32_t main_period = 1000; //tick is 100us, set period for 10hz, 100ms
+uint32_t main_period = 2000; //tick is 100us, set period for 15hz, 200ms
 float maxBrickV=3.5;
 float minBrickV=3.5;
 uint8_t cells[] = ACTIVE_CELLS;
 float voltagesFloat[SIZE_OF_ARRAY(cells)];
-uint8_t state=2;
+uint8_t state=3;//2;
 uint8_t minVctr=3;
 uint8_t maxVctr=3;
+
+uint32_t dcc = 0;
 
 /* transfer state */
 __IO uint32_t wTransferState = TRANSFER_WAIT;
@@ -102,6 +104,7 @@ void LTC_wake(uint16_t numChips);
 void LTC_Send(uint16_t cmd16, uint8_t poll);
 void LTC_Send_Recieve(uint16_t cmd16, uint8_t *outputRxData, uint16_t rxBytes);
 void LTC_Write(uint16_t cmd16, uint8_t total_ic, uint8_t *data);
+void LTC_bleed(uint32_t dcc);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -173,7 +176,7 @@ int main(void)
 
   while(0) //this loop cycles through the cell discharge channels for testing, ie flashes all the pretty lights!
   {
-		uint32_t dcc= 0xaaaa;
+		dcc= 0xaaaa;
 		CRGA[4]=(uint8_t)(dcc);
 		CRGA[5]= (CRGA[5] & 0xF0) | ((dcc >> 8) & 0x0F);
 		CRGB[0]= (CRGB[0] & 0x0F) | ((dcc >> 8) & 0xF0);
@@ -224,20 +227,21 @@ int main(void)
 
 	  LTC_wake(1);
 	  delay_u(300);
-	  //Measure cell voltages ################################################################
-      HAL_GPIO_TogglePin(LED2_GPIO_PORT, LED2_PIN);
 	  LTC_wake(1);
-	  //cmd=ADCVSC | MD=0x0 | DCP=1 | CH=0x0 = Measure all cell voltages + stack at 422hz, discharge permitted
-	  uint16_t cmd=ADCVSC|(MD<<7)|(0x1<<4);
+
+	  uint16_t cmd=ADSTAT|(MD<<7)|(0x2); //read out die temperature
 	  //wait (poll ltc5813) for conversion to complete
 	  LTC_Send(cmd, 1);
 
-	  //LTC_wake(1);
-	  //Measure aux voltages ################################################################
-	  //cmd=ADAX | MD=0x0 | CHG=0x0 = Measure GPIO and Vref at 422hz
-	  cmd=ADAX|(MD<<7)|0x0;
+	  //Measure cell voltages ################################################################
+      HAL_GPIO_TogglePin(LED2_GPIO_PORT, LED2_PIN);
+      //turn off bleed
+	  LTC_bleed(0);
+	  //cmd=ADCVSC | MD=0x0 | DCP=1 | CH=0x0 = Measure all cell voltages + stack at 422hz, discharge permitted
+	  cmd=ADCVSC|(MD<<7)|(0x1<<4);
 	  //wait (poll ltc5813) for conversion to complete
 	  LTC_Send(cmd, 1);
+
 
 	  //LTC_wake(1);
 	  uint8_t rxBytes=6; //(3x2x8b)
@@ -253,17 +257,6 @@ int main(void)
 		  }
 	  }
 
-	  //Read out all cell voltages, save raw ADC values in voltages array
-	  uint8_t RDAUXcmds[4]={RDAUXA,RDAUXB,RDAUXC,RDAUXD}; //read all cell voltage register groups
-	  for(int c=0;c<4;c++)
-	  {
-		  LTC_Send_Recieve(RDAUXcmds[c], (uint8_t *)aRxBuffer, rxBytes);
-		  for(int i=0;i<3;i++)
-		  {
-			  auxVoltages[i+c*3] = (aRxBuffer[(i<<1)+1] << 8) | aRxBuffer[(i<<1)];
-		  }
-	  }
-
 	  //Convert to float
 	  maxBrickV=(float)(voltages[0])*ADC_RESOLUTION;
 	  minBrickV=(float)(voltages[0])*ADC_RESOLUTION;
@@ -276,6 +269,46 @@ int main(void)
 		  			  maxBrickV=voltagesFloat[i];
 		  if(voltagesFloat[i] < minBrickV)
 		  			  minBrickV=voltagesFloat[i];
+	  }
+	  //Now we have max and min.
+	  //run bleed algorithm
+	  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
+	  {
+		  float hyst=0.005;
+		  uint32_t cellBit = (1 << cells[i]);
+		  if(dcc & cellBit)
+			  hyst=0.002;
+
+		  if(voltagesFloat[i] > (minBrickV + hyst))
+			  dcc |= cellBit;
+		  else
+			  dcc &= ~cellBit;
+	  }
+	  LTC_Send_Recieve(RDSTATA, (uint8_t *)aRxBuffer, rxBytes);
+	  dieTemp = (float)((aRxBuffer[3] << 8) | aRxBuffer[2]) * 0.0131579 - 276.0;
+	  if((minBrickV > BLEED_THRESHOLD) & (dieTemp < OVT))
+		  LTC_bleed(dcc);
+	  else
+		  dcc=0;
+
+
+
+	  //LTC_wake(1);
+	  //Measure aux voltages ################################################################
+	  //cmd=ADAX | MD=0x0 | CHG=0x0 = Measure GPIO and Vref at 422hz
+	  cmd=ADAX|(MD<<7)|0x0;
+	  //wait (poll ltc5813) for conversion to complete
+	  LTC_Send(cmd, 1);
+
+	  //Read out all AUX voltages, save raw ADC values in voltages array
+	  uint8_t RDAUXcmds[4]={RDAUXA,RDAUXB,RDAUXC,RDAUXD}; //read all cell voltage register groups
+	  for(int c=0;c<4;c++)
+	  {
+		  LTC_Send_Recieve(RDAUXcmds[c], (uint8_t *)aRxBuffer, rxBytes);
+		  for(int i=0;i<3;i++)
+		  {
+			  auxVoltages[i+c*3] = (aRxBuffer[(i<<1)+1] << 8) | aRxBuffer[(i<<1)];
+		  }
 	  }
 
 	  //Convert to float for debug
@@ -294,10 +327,14 @@ int main(void)
 	  }
 	  else
 	  {
-		  if(minVctr>1)
+		  if(minVctr)
+		  {
 			  minVctr--;
+		  }
 		  else
+		  {
 			  state = 0;
+		  }
 	  }
 
 	  //Check that we are good to charge!
@@ -308,11 +345,14 @@ int main(void)
 	  else
 	  {
 		  if(maxVctr)
+		  {
 			  maxVctr--;
+		  }
 		  else
+		  {
 			  state = 0;
+		  }
 	  }
-	  state=3;
 	  switch(state){
 	  case 0:
 		  // off state.. wait for reset
@@ -321,8 +361,10 @@ int main(void)
 		  //turn off charge FET
 		  CRGB[0]= (CRGB[0] | 0x02);
 
-		  chargeContactor_off();
 		  busContactor_off();
+		  chargeSSR_off();
+
+ 		  HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, 0);
 		  break;
 	  case 1:
 		  //check buttons
@@ -343,19 +385,21 @@ int main(void)
 		  //turn on charge FET
 		  CRGB[0]= (CRGB[0] & ~0x02);
 		  //turn on charge contactor
-		  chargeContactor_on();
+		  chargeSSR_on();
+		  HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, 1);
 		  state=1;
 		  break;
 	  default:
 		  state=0;
 		  break;
 	  }
-
+/*
 	  //Write gpio outputs to 6813
 	  LTC_wake(1);
 	  delay_u(300);
 	  LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
 	  LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
+*/
   }
 }
 
@@ -374,6 +418,18 @@ void LTC_wake(uint16_t numChips)
 			HAL_GPIO_WritePin(BMB_CS_GPIO_PORT, BMB_CS_PIN, HIGH);
 	//}
 	}
+}
+
+void LTC_bleed(uint32_t dcc)
+{
+	uint8_t CRGA[] = {0xFC, 0x00, 0x00, 0x00, 0x00, 0x00};
+	uint8_t CRGB[] = {0x0F, 0x00, 0x00, 0x00, 0x00, 0x00};
+	CRGA[4]=(uint8_t)(dcc);
+	CRGA[5]= (CRGA[5] & 0xF0) | ((dcc >> 8) & 0x0F);
+	CRGB[0]= (CRGB[0] & 0x0F) | ((dcc >> 8) & 0xF0);
+	CRGB[1]= (CRGB[1] & 0xFC) | ((dcc >> 16) & 0x03);
+	LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
+	LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
 }
 
 void LTC_Send(uint16_t cmd16, uint8_t poll)
@@ -935,7 +991,7 @@ void _Error_Handler(char *file, int line)
   /* User can add his own implementation to report the HAL error return state */
   while(1)
   {
-	 HAL_GPIO_TogglePin(LED3_GPIO_PORT, LED3_PIN);
+	 //HAL_GPIO_TogglePin(LED3_GPIO_PORT, LED3_PIN);
   }
   /* USER CODE END Error_Handler_Debug */
 }
