@@ -153,7 +153,7 @@ int main(void)
   //MX_CAN1_Init();
   MX_SPI1_Init();
   //MX_USART1_UART_Init();
-  //MX_USB_DEVICE_Init();
+  MX_USB_DEVICE_Init();
   //MX_SPI2_Init();
   //MX_RTC_Init();
   //MX_LPTIM1_Init();
@@ -319,6 +319,14 @@ int main(void)
 
 	  current=(auxVoltagesFloat[0] - auxVoltagesFloat[1] - AMP_OFFSET_ERROR) * AMPS_PER_VOLT;
 
+	  //print for debug
+	  printf("Time: %d.%d Cell: ",tickstart/10000,(tickstart/1000)%10);
+	  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
+		  printf("%1.4f ", voltagesFloat[i]);
+	  printf("Aux: ");
+	  for(int i=0; i<12; i++)
+		  printf("%1.4f ", auxVoltagesFloat[i]);
+	  printf("Current: %2.3f \n\r", current);
 
 	  //Check that we are good to ride!
 	  if(minBrickV > MIN_V)
@@ -486,6 +494,13 @@ void LTC_Send(uint16_t cmd16, uint8_t poll)
 	}
 
 	HAL_GPIO_WritePin(BMB_CS_GPIO_PORT, BMB_CS_PIN, HIGH);
+}
+
+//redirect STDIO (printf) to the USB virtual serial port.
+int _write(int file,char *ptr, int len)
+{
+    CDC_Transmit_FS((uint8_t*)ptr, len);
+    return len;
 }
 
 void LTC_Write(uint16_t cmd16, uint8_t total_ic, uint8_t *data)
