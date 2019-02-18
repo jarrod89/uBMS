@@ -206,7 +206,9 @@ int main(void)
 		LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
 		delay_m(100);
   }
+  delay_m(5000); //delay to give us time get the serial console reset
   tickstart = HAL_GetTick();
+  int logCtr=0;
   while (1)
   {
 	  /* Main loop, testing for board bring-up.
@@ -272,6 +274,8 @@ int main(void)
 	  }
 	  //Now we have max and min.
 	  //run bleed algorithm
+	  char bleedDebug[SIZE_OF_ARRAY(cells)+1];
+	  bleedDebug[SIZE_OF_ARRAY(cells)] = '\0';
 	  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
 	  {
 		  float hyst=0.005;
@@ -280,16 +284,28 @@ int main(void)
 			  hyst=0.002;
 
 		  if(voltagesFloat[i] > (minBrickV + hyst))
+		  {
+			  bleedDebug[i]='1';
 			  dcc |= cellBit;
+		  }
 		  else
+		  {
+			  bleedDebug[i]='0';
 			  dcc &= ~cellBit;
+		  }
 	  }
 	  LTC_Send_Recieve(RDSTATA, (uint8_t *)aRxBuffer, rxBytes);
 	  dieTemp = (float)((aRxBuffer[3] << 8) | aRxBuffer[2]) * 0.0131579 - 276.0;
 	  if((minBrickV > BLEED_THRESHOLD) & (dieTemp < OVT))
+	  {
 		  LTC_bleed(dcc);
+	  }
 	  else
+	  {
 		  dcc=0;
+		  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
+			  bleedDebug[i]='0';
+	  }
 
 
 
@@ -318,16 +334,21 @@ int main(void)
 	  }
 
 	  current=(auxVoltagesFloat[0] - auxVoltagesFloat[1] - AMP_OFFSET_ERROR) * AMPS_PER_VOLT;
-
-	  //print for debug
-	  printf("Time: %d.%d Cell: ",tickstart/10000,(tickstart/1000)%10);
-	  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
-		  printf("%1.4f ", voltagesFloat[i]);
-	  printf("Aux: ");
-	  for(int i=0; i<12; i++)
-		  printf("%1.4f ", auxVoltagesFloat[i]);
-	  printf("Current: %2.3f \n\r", current);
-
+	  if(logCtr >=100)
+	  {
+		  logCtr=0;
+		  //print for debug
+		  printf("T: %d.%d C: ",tickstart/10000,(tickstart/1000)%10);
+		  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
+			  printf("%1.4f ", voltagesFloat[i]);
+		  printf("B: %s ",bleedDebug);
+		  printf("A: ");
+		  for(int i=0; i<12; i++)
+			  printf("%1.4f ", auxVoltagesFloat[i]);
+		  printf("I: %2.3f \n\r", current);
+	  }
+	  else
+		  logCtr++;
 	  //Check that we are good to ride!
 	  if(minBrickV > MIN_V)
 	  {
@@ -341,7 +362,7 @@ int main(void)
 		  }
 		  else
 		  {
-			  state = 0;
+			  state = 5;
 		  }
 	  }
 
@@ -377,6 +398,13 @@ int main(void)
  		  if(maxBrickV < (MAX_V-BRICK_V_HYST))
  			  state = 3;
 		  break;
+        case 5:
+        	// off state.. wait for reset
+        	//turn off load FET
+        	CRGB[0]= (CRGB[0] | 0x01);
+        	busContactor_off();
+        	state = 3;
+		break;
 	  case 1:
 		  //check buttons
 		  if(clear_btn()==0) //ride mode
