@@ -52,20 +52,28 @@
 #define __MAIN_H__
 
 /* Includes ------------------------------------------------------------------*/
+//tick is 100us, set period for 10hz, 100ms
+#define MAIN_PERIOD (100)
+//set log period = main period
+#define LOG_PERIOD (0)
+
+#define NUMCHIPS (2)
+#define ACTIVE_CELLS {0,1,2,3,4, 6,7,8,9,10, 12,13,14,15, 18,19,20,21,22, 24,25,26,27,28, 30,31,32,33}
+
 #define MIN_V (2.5)
 #define MAX_V (3.655)
 #define BRICK_V_HYST (0.01)
 //(4.2)
 #define BLEED_THRESHOLD (3.35)
 #define OVT (65.0)
-#define ACTIVE_CELLS {0,1,2,3,4, 6,7,8,9,10, 12,13,14,15, 16}
 //current shunt
 #define RSHUNT 0.001
 #define AMP_GAIN 31.6
 #define AMPS_PER_VOLT (1/(RSHUNT*AMP_GAIN))
 #define AMP_OFFSET_ERROR 0
 //(-0.0011)
-
+#define CELL_V_PER_CHIP (18)
+#define AUX_V_PER_CHIP (12)
 #define ADC_RESOLUTION (0.0001)
 
 //Inputs:

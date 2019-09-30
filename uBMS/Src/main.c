@@ -63,26 +63,28 @@ enum {
 /* Buffer used for transmission */
 uint8_t aTxBuffer[13];
 /* Buffer used for reception */
-uint8_t aRxBuffer[13];
+uint8_t aRxBuffer[13*NUMCHIPS];
 
 //Globals for debug
-uint16_t voltages[18];
+uint16_t voltages[CELL_V_PER_CHIP * NUMCHIPS];
+uint8_t cells[] = ACTIVE_CELLS;
+float voltagesFloat[SIZE_OF_ARRAY(cells)];
 
-uint16_t auxVoltages[12];
-float auxVoltagesFloat[12];
+uint16_t auxVoltages[AUX_V_PER_CHIP * NUMCHIPS];
+float auxVoltagesFloat[AUX_V_PER_CHIP * NUMCHIPS];
+
 float current=0;
 float dieTemp = 0;
 uint32_t tickstart = 0;
-uint32_t main_period = 2000; //tick is 100us, set period for 15hz, 200ms
+uint32_t main_ctr = 0;
+
 float maxBrickV=3.5;
 float minBrickV=3.5;
-uint8_t cells[] = ACTIVE_CELLS;
-float voltagesFloat[SIZE_OF_ARRAY(cells)];
 uint8_t state=3;//2;
 uint8_t minVctr=3;
 uint8_t maxVctr=3;
 
-uint32_t dcc = 0;
+uint32_t dcc[NUMCHIPS];
 
 /* transfer state */
 __IO uint32_t wTransferState = TRANSFER_WAIT;
@@ -104,7 +106,7 @@ void LTC_wake(uint16_t numChips);
 void LTC_Send(uint16_t cmd16, uint8_t poll);
 void LTC_Send_Recieve(uint16_t cmd16, uint8_t *outputRxData, uint16_t rxBytes);
 void LTC_Write(uint16_t cmd16, uint8_t total_ic, uint8_t *data);
-void LTC_bleed(uint32_t dcc);
+void LTC_bleed(uint32_t *dcc, uint8_t total_ic);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -166,24 +168,43 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   //Write the config register to stop Vref from going down, this makes the aux measurements more accurate
-  LTC_wake(1);
+  LTC_wake(NUMCHIPS);
   delay_u(300);
-  LTC_wake(1);
-  uint8_t CRGA[] = {0xFC, 0x00, 0x00, 0x00, 0x00, 0x00};
-  uint8_t CRGB[] = {0x0F, 0x00, 0x00, 0x00, 0x00, 0x00};
+  LTC_wake(NUMCHIPS);
+  //uint8_t CRGA[] = {0xFC, 0x00, 0x00, 0x00, 0x00, 0x00};
+  //uint8_t CRGB[] = {0x0F, 0x00, 0x00, 0x00, 0x00, 0x00};
   //CRGA[5]= (CRGA[5] | 0x01);
-  LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
+  //LTC_Write(WRCFGA, NUMCHIPS, (uint8_t *) CRGA);
 
-  while(0) //this loop cycles through the cell discharge channels for testing, ie flashes all the pretty lights!
+  while(1) //this loop cycles through the cell discharge channels for testing, ie flashes all the pretty lights!
   {
-		dcc= 0xaaaa;
-		CRGA[4]=(uint8_t)(dcc);
+		dcc[0]= 0x0000;
+		dcc[1]= dcc[0];
+		LTC_bleed(dcc, NUMCHIPS);
+		delay_m(100);
+
+		dcc[0]= 0xAAAA;
+		dcc[1]= dcc[0];
+		LTC_bleed(dcc, NUMCHIPS);
+		delay_m(100);
+
+		dcc[0]= 0x5555;
+		dcc[1]= dcc[0];
+		LTC_bleed(dcc, NUMCHIPS);
+		delay_m(100);
+
+		dcc[0]= 0xFFFF;
+		dcc[1]= dcc[0];
+		LTC_bleed(dcc, NUMCHIPS);
+		delay_m(100);
+  }
+/*		CRGA[4]=(uint8_t)(dcc);
 		CRGA[5]= (CRGA[5] & 0xF0) | ((dcc >> 8) & 0x0F);
 		CRGB[0]= (CRGB[0] & 0x0F) | ((dcc >> 8) & 0xF0);
 		CRGB[1]= (CRGB[1] & 0xFC) | ((dcc >> 16) & 0x03);
 		LTC_wake(1);
-		LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
-		LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
+		LTC_Write(WRCFGA, NUMCHIPS, (uint8_t *) CRGA);
+		LTC_Write(WRCFGB, NUMCHIPS, (uint8_t *) CRGB);
 		delay_m(100);
 
 		dcc= 0x5555;
@@ -192,8 +213,8 @@ int main(void)
 		CRGB[0]= (CRGB[0] & 0x0F) | ((dcc >> 8) & 0xF0);
 		CRGB[1]= (CRGB[1] & 0xFC) | ((dcc >> 16) & 0x03);
 		LTC_wake(1);
-		LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
-		LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
+		LTC_Write(WRCFGA, NUMCHIPS, (uint8_t *) CRGA);
+		LTC_Write(WRCFGB, NUMCHIPS, (uint8_t *) CRGB);
 		delay_m(100);
 
 		dcc= 0xffff;
@@ -202,10 +223,10 @@ int main(void)
 		CRGB[0]= (CRGB[0] & 0x0F) | ((dcc >> 8) & 0xF0);
 		CRGB[1]= (CRGB[1] & 0xFC) | ((dcc >> 16) & 0x03);
 		LTC_wake(1);
-		LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
-		LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
+		LTC_Write(WRCFGA, NUMCHIPS, (uint8_t *) CRGA);
+		LTC_Write(WRCFGB, NUMCHIPS, (uint8_t *) CRGB);
 		delay_m(100);
-  }
+  }*/
   delay_m(5000); //delay to give us time get the serial console reset
   tickstart = HAL_GetTick();
   int logCtr=0;
@@ -222,14 +243,15 @@ int main(void)
 	   * Run main loop at 10hz
 	   * get a low power mode working and use an interrupt instead of polling the sysTick
 	   */
-	  while((HAL_GetTick() - tickstart) < main_period)
+	  while((HAL_GetTick() - tickstart) < MAIN_PERIOD)
 	  {
 	  }
 	  tickstart = HAL_GetTick();
+	  main_ctr++;
 
-	  LTC_wake(1);
+	  LTC_wake(NUMCHIPS);
 	  delay_u(300);
-	  LTC_wake(1);
+	  LTC_wake(NUMCHIPS);
 
 	  uint16_t cmd=ADSTAT|(MD<<7)|(0x2); //read out die temperature
 	  //wait (poll ltc5813) for conversion to complete
@@ -238,24 +260,29 @@ int main(void)
 	  //Measure cell voltages ################################################################
       HAL_GPIO_TogglePin(LED2_GPIO_PORT, LED2_PIN);
       //turn off bleed
-	  LTC_bleed(0);
+      for (uint8_t current_ic = 0; current_ic < NUMCHIPS; current_ic++)
+      {
+    	  dcc[current_ic] = 0x00;
+      }
+	  LTC_bleed(dcc, NUMCHIPS);
 	  //cmd=ADCVSC | MD=0x0 | DCP=1 | CH=0x0 = Measure all cell voltages + stack at 422hz, discharge permitted
 	  cmd=ADCVSC|(MD<<7)|(0x1<<4);
 	  //wait (poll ltc5813) for conversion to complete
 	  LTC_Send(cmd, 1);
 
-
-	  //LTC_wake(1);
-	  uint8_t rxBytes=6; //(3x2x8b)
+	  uint8_t rxBytes=6*NUMCHIPS; //(3x2x8b)
 
 	  //Read out all cell voltages, save raw ADC values in voltages array
 	  uint8_t RDCVAcmds[6]={RDCVA,RDCVB,RDCVC,RDCVD,RDCVE,RDCVF}; //read all cell voltage register groups
 	  for(int c=0;c<6;c++)
 	  {
 		  LTC_Send_Recieve(RDCVAcmds[c], (uint8_t *)aRxBuffer, rxBytes);
-		  for(int i=0;i<3;i++)
+		  for(int chip=0;chip<NUMCHIPS;chip++)
 		  {
-			  voltages[i+c*3] = (aRxBuffer[(i<<1)+1] << 8) | aRxBuffer[(i<<1)];
+			  for(int i=0;i<3;i++)
+			  {
+				  voltages[i + c*3 + chip*6*3] = (aRxBuffer[(i<<1)+1 + chip*3*2] << 8) | aRxBuffer[(i<<1) + chip*3*2];
+			  }
 		  }
 	  }
 
@@ -280,29 +307,29 @@ int main(void)
 	  {
 		  float hyst=0.005;
 		  uint32_t cellBit = (1 << cells[i]);
-		  if(dcc & cellBit)
+		  if(dcc[0] & cellBit)
 			  hyst=0.002;
 
 		  if(voltagesFloat[i] > (minBrickV + hyst))
 		  {
 			  bleedDebug[i]='1';
-			  dcc |= cellBit;
+			  dcc[0] |= cellBit;
 		  }
 		  else
 		  {
 			  bleedDebug[i]='0';
-			  dcc &= ~cellBit;
+			  dcc[0] &= ~cellBit;
 		  }
 	  }
 	  LTC_Send_Recieve(RDSTATA, (uint8_t *)aRxBuffer, rxBytes);
 	  dieTemp = (float)((aRxBuffer[3] << 8) | aRxBuffer[2]) * 0.0131579 - 276.0;
 	  if((minBrickV > BLEED_THRESHOLD) & (dieTemp < OVT))
 	  {
-		  LTC_bleed(dcc);
+		  LTC_bleed(dcc, NUMCHIPS);
 	  }
 	  else
 	  {
-		  dcc=0;
+		  dcc[0]=0;
 		  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
 			  bleedDebug[i]='0';
 	  }
@@ -334,11 +361,11 @@ int main(void)
 	  }
 
 	  current=(auxVoltagesFloat[0] - auxVoltagesFloat[1] - AMP_OFFSET_ERROR) * AMPS_PER_VOLT;
-	  if(logCtr >=100)
+	  if(logCtr >= LOG_PERIOD)
 	  {
 		  logCtr=0;
 		  //print for debug
-		  printf("T: %d.%d C: ",tickstart/10000,(tickstart/1000)%10);
+		  printf("T: %d.%d C: ",main_ctr/MAIN_PERIOD,(main_ctr/(MAIN_PERIOD/10))%10);
 		  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
 			  printf("%1.4f ", voltagesFloat[i]);
 		  printf("B: %s ",bleedDebug);
@@ -386,9 +413,9 @@ int main(void)
 	  case 0:
 		  // off state.. wait for reset
 		  //turn off load FET
-		  CRGB[0]= (CRGB[0] | 0x01);
+		  //CRGB[0]= (CRGB[0] | 0x01);
 		  //turn off charge FET
-		  CRGB[0]= (CRGB[0] | 0x02);
+		  //CRGB[0]= (CRGB[0] | 0x02);
 
 		  busContactor_off();
 		  chargeSSR_off();
@@ -401,7 +428,7 @@ int main(void)
         case 5:
         	// off state.. wait for reset
         	//turn off load FET
-        	CRGB[0]= (CRGB[0] | 0x01);
+        	//CRGB[0]= (CRGB[0] | 0x01);
         	busContactor_off();
         	state = 3;
 		break;
@@ -415,14 +442,14 @@ int main(void)
 		  break;
 	  case 2:
 		  //turn on load FET
-		  CRGB[0]= (CRGB[0] & ~0x01);
+		  //CRGB[0]= (CRGB[0] & ~0x01);
 		  //turn on bus contactor
 		  busContactor_on();
 		  state=1;
 		  break;
 	  case 3:
 		  //turn on charge FET
-		  CRGB[0]= (CRGB[0] & ~0x02);
+		  //CRGB[0]= (CRGB[0] & ~0x02);
 		  //turn on charge contactor
 		  chargeSSR_on();
 		  HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, 1);
@@ -459,16 +486,39 @@ void LTC_wake(uint16_t numChips)
 	}
 }
 
-void LTC_bleed(uint32_t dcc)
+void LTC_bleed(uint32_t *dcc1, uint8_t total_ic)
 {
-	uint8_t CRGA[] = {0xFC, 0x00, 0x00, 0x00, 0x00, 0x00};
+	//allocate memory for entire data packet
+	uint8_t *CRGA;
+	uint8_t *CRGB;
+	CRGA = (uint8_t *)malloc(total_ic*6*sizeof(uint8_t));
+	CRGB = (uint8_t *)malloc(total_ic*6*sizeof(uint8_t));
+	for (uint8_t current_ic = 0; current_ic < total_ic; current_ic++)       // executes for each LTC681x in daisy chain, this loops starts with
+	{
+		CRGA[current_ic*6+0]=0xFC;
+		CRGA[current_ic*6+1]=0x00;
+		CRGA[current_ic*6+2]=0x00;
+		CRGA[current_ic*6+3]=0x00;
+		CRGA[current_ic*6+4]=(uint8_t)(dcc1[current_ic]);
+		CRGA[current_ic*6+5]=((dcc1[current_ic] >> 8) & 0x0F);
+
+
+		CRGB[current_ic*6+0]=0x0F | ((dcc1[current_ic] >> 8) & 0xF0);
+		CRGB[current_ic*6+1]=((dcc1[current_ic] >> 16) & 0x03);
+		CRGB[current_ic*6+2]=0x00;
+		CRGB[current_ic*6+3]=0x00;
+		CRGB[current_ic*6+4]=0x00;
+		CRGB[current_ic*6+5]=0x00;
+	}
+/*	uint8_t CRGA[] = {0xFC, 0x00, 0x00, 0x00, 0x00, 0x00};
 	uint8_t CRGB[] = {0x0F, 0x00, 0x00, 0x00, 0x00, 0x00};
 	CRGA[4]=(uint8_t)(dcc);
 	CRGA[5]= (CRGA[5] & 0xF0) | ((dcc >> 8) & 0x0F);
 	CRGB[0]= (CRGB[0] & 0x0F) | ((dcc >> 8) & 0xF0);
 	CRGB[1]= (CRGB[1] & 0xFC) | ((dcc >> 16) & 0x03);
-	LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
-	LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
+	*/
+	LTC_Write(WRCFGA, total_ic, (uint8_t *) CRGA);
+	LTC_Write(WRCFGB, total_ic, (uint8_t *) CRGB);
 }
 
 void LTC_Send(uint16_t cmd16, uint8_t poll)
