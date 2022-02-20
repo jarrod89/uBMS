@@ -73,12 +73,13 @@ float auxVoltagesFloat[12];
 float current=0;
 float dieTemp = 0;
 uint32_t tickstart = 0;
-uint32_t main_period = 2000; //tick is 100us, set period for 15hz, 200ms
+uint32_t tickNow = 0;
+uint32_t main_period = 2000; //tick is 100us, set period for 5hz, 200ms
 float maxBrickV=3.5;
 float minBrickV=3.5;
 uint8_t cells[] = ACTIVE_CELLS;
 float voltagesFloat[SIZE_OF_ARRAY(cells)];
-uint8_t state=3;//2;
+uint8_t state=0;//2;
 uint8_t minVctr=3;
 uint8_t maxVctr=3;
 
@@ -104,7 +105,7 @@ void LTC_wake(uint16_t numChips);
 void LTC_Send(uint16_t cmd16, uint8_t poll);
 void LTC_Send_Recieve(uint16_t cmd16, uint8_t *outputRxData, uint16_t rxBytes);
 void LTC_Write(uint16_t cmd16, uint8_t total_ic, uint8_t *data);
-void LTC_bleed(uint32_t dcc);
+void LTC_bleed(uint32_t dcc, uint8_t *CRGA, uint8_t *CRGB);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -219,13 +220,15 @@ int main(void)
 	   */
 
 	  /*
-	   * Run main loop at 10hz
+	   * Run main loop at 5hz
 	   * get a low power mode working and use an interrupt instead of polling the sysTick
 	   */
-	  while((HAL_GetTick() - tickstart) < main_period)
+	  tickNow=tickstart;
+	  while((tickNow - tickstart) < main_period)
 	  {
+		  tickNow=HAL_GetTick();
 	  }
-	  tickstart = HAL_GetTick();
+	  tickstart = tickNow;
 
 	  LTC_wake(1);
 	  delay_u(300);
@@ -238,7 +241,7 @@ int main(void)
 	  //Measure cell voltages ################################################################
       HAL_GPIO_TogglePin(LED2_GPIO_PORT, LED2_PIN);
       //turn off bleed
-	  LTC_bleed(0);
+	  LTC_bleed(0, CRGA, CRGB);
 	  //cmd=ADCVSC | MD=0x0 | DCP=1 | CH=0x0 = Measure all cell voltages + stack at 422hz, discharge permitted
 	  cmd=ADCVSC|(MD<<7)|(0x1<<4);
 	  //wait (poll ltc5813) for conversion to complete
@@ -298,7 +301,7 @@ int main(void)
 	  dieTemp = (float)((aRxBuffer[3] << 8) | aRxBuffer[2]) * 0.0131579 - 276.0;
 	  if((minBrickV > BLEED_THRESHOLD) & (dieTemp < OVT))
 	  {
-		  LTC_bleed(dcc);
+		  LTC_bleed(dcc, CRGA, CRGB);
 	  }
 	  else
 	  {
@@ -334,18 +337,18 @@ int main(void)
 	  }
 
 	  current=(auxVoltagesFloat[0] - auxVoltagesFloat[1] - AMP_OFFSET_ERROR) * AMPS_PER_VOLT;
-	  if(logCtr >=100)
+	  if(logCtr >=5)
 	  {
 		  logCtr=0;
 		  //print for debug
-		  printf("T: %d.%d C: ",tickstart/10000,(tickstart/1000)%10);
-		  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
-			  printf("%1.4f ", voltagesFloat[i]);
-		  printf("B: %s ",bleedDebug);
-		  printf("A: ");
-		  for(int i=0; i<12; i++)
-			  printf("%1.4f ", auxVoltagesFloat[i]);
-		  printf("I: %2.3f \n\r", current);
+		  printf("T: %d S: %d min: %1.4f max: %1.4f B: %s I: %2.3f \n\r",tickstart/100, state, minBrickV, maxBrickV, bleedDebug, current);
+//		  for(int i=0; i<SIZE_OF_ARRAY(cells); i++)
+//			  printf("%1.4f ", voltagesFloat[i]);
+//		  printf("B: %s ",bleedDebug);
+//		  printf("A: ");
+//		  for(int i=0; i<12; i++)
+//			  printf("%1.4f ", auxVoltagesFloat[i]);
+//		  printf("I: %2.3f \n\r", current);
 	  }
 	  else
 		  logCtr++;
@@ -362,7 +365,7 @@ int main(void)
 		  }
 		  else
 		  {
-			  state = 5;
+			  state = 0;
 		  }
 	  }
 
@@ -394,9 +397,7 @@ int main(void)
 		  chargeSSR_off();
 
  		  HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, 0);
-
- 		  if(maxBrickV < (MAX_V-BRICK_V_HYST))
- 			  state = 3;
+ 		  state=1;
 		  break;
         case 5:
         	// off state.. wait for reset
@@ -407,9 +408,9 @@ int main(void)
 		break;
 	  case 1:
 		  //check buttons
-		  if(clear_btn()==0) //ride mode
+		  if(clear_btn()==1) //ride mode
 			  state=2;
-		  else if(test_btn()==0) //charge mode?
+		  else if(test_btn()==1) //charge mode?
 			  state=3;
 
 		  break;
@@ -418,7 +419,7 @@ int main(void)
 		  CRGB[0]= (CRGB[0] & ~0x01);
 		  //turn on bus contactor
 		  busContactor_on();
-		  state=1;
+		  //state=1;
 		  break;
 	  case 3:
 		  //turn on charge FET
@@ -426,19 +427,19 @@ int main(void)
 		  //turn on charge contactor
 		  chargeSSR_on();
 		  HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, 1);
-		  state=1;
+		  //state=1;
 		  break;
 	  default:
 		  state=0;
 		  break;
 	  }
-/*
+
 	  //Write gpio outputs to 6813
 	  LTC_wake(1);
 	  delay_u(300);
 	  LTC_Write(WRCFGB, 1, (uint8_t *) CRGB);
 	  LTC_Write(WRCFGA, 1, (uint8_t *) CRGA);
-*/
+
   }
 }
 
@@ -459,10 +460,10 @@ void LTC_wake(uint16_t numChips)
 	}
 }
 
-void LTC_bleed(uint32_t dcc)
+void LTC_bleed(uint32_t dcc, uint8_t *CRGA, uint8_t *CRGB)
 {
-	uint8_t CRGA[] = {0xFC, 0x00, 0x00, 0x00, 0x00, 0x00};
-	uint8_t CRGB[] = {0x0F, 0x00, 0x00, 0x00, 0x00, 0x00};
+	//uint8_t CRGA[] = {0xFC, 0x00, 0x00, 0x00, 0x00, 0x00};
+	//uint8_t CRGB[] = {0x0F, 0x00, 0x00, 0x00, 0x00, 0x00};
 	CRGA[4]=(uint8_t)(dcc);
 	CRGA[5]= (CRGA[5] & 0xF0) | ((dcc >> 8) & 0x0F);
 	CRGB[0]= (CRGB[0] & 0x0F) | ((dcc >> 8) & 0xF0);

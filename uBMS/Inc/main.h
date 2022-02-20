@@ -53,18 +53,18 @@
 
 /* Includes ------------------------------------------------------------------*/
 #define MIN_V (2.5)
-#define MAX_V (3.655)
+#define MAX_V (3.45)
+//(3.655)
 #define BRICK_V_HYST (0.01)
 //(4.2)
-#define BLEED_THRESHOLD (3.35)
-#define OVT (65.0)
+#define BLEED_THRESHOLD (3.2)
+#define OVT (85.0)
 #define ACTIVE_CELLS {0,1,2,3,4, 6,7,8,9,10, 12,13,14,15, 16}
 //current shunt
 #define RSHUNT 0.001
 #define AMP_GAIN 31.6
 #define AMPS_PER_VOLT (1/(RSHUNT*AMP_GAIN))
-#define AMP_OFFSET_ERROR 0
-//(-0.0011)
+#define AMP_OFFSET_ERROR (0.0162)//(-0.0011)
 
 #define ADC_RESOLUTION (0.0001)
 
